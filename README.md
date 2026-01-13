@@ -1,48 +1,50 @@
-# Cubox Plugin for Obsidian
+# Cubox Daily Sync for Obsidian
 
-The official Cubox plugin for Obsidian allows you to synchronize articles and annotations from Cubox to Obsidian.
+A minimal Cubox sync plugin that appends new Cubox entries to today’s daily note.
 
 ## Features
 
-- Automatic Sync: Periodically sync articles and annotations from Cubox to Obsidian
-- Filtering: Filter content by folder, type, tags, and status
-- Templates: Customize file names, front matter, and content format
-- Annotation Sync: Sync highlighted content from Cubox to Obsidian notes
+- Auto sync on a timer (configurable in minutes)
+- Manual command: “Sync Cubox to daily note”
+- Link entries rendered with a template (default: `[{{title}}]({{url}})`)
+- Memo/text entries append full content (no title)
+- Image entries download to a local vault folder and embed locally
+
+## Requirements
+
+- Obsidian core **Daily Notes** plugin must be enabled
 
 ## Installation
 
 ### Install from the Community
 
 1. Open Obsidian settings
-2. Navigate to the "Community plugins" tab
-3. Click the "Browse" button and search for "Cubox"
+2. Navigate to the “Community plugins” tab
+3. Click “Browse” and search for “Cubox”
 4. Click Install
 
 ### Manual Installation
 
-1. Download the latest `main.js`, `manifest.json`, and `styles.css` files
-2. Create a `.obsidian/plugins/obsidian-cubox` folder in your Obsidian vault
-3. Copy the downloaded files into this folder
+1. Download the latest `main.js`, `manifest.json`, and `styles.css` from the release
+2. Create `.obsidian/plugins/obsidian-cubox` in your vault
+3. Copy the files into that folder
 4. Enable the plugin in Obsidian settings
 
 ## Configuration
 
-1. Cubox Server Domain: Select the Cubox server domain you use (cubox.cc or cubox.pro)
-2. Cubox API Key: Enter your Cubox API key or link (generate it in the Cubox web settings under Extensions & Automation - API Extension)
+- **Cubox server domain**: `cubox.cc` or `cubox.pro`
+- **Cubox API key**: paste the key or the full API link
+- **Sync frequency (minutes)**: set to `0` to disable auto sync
+- **Link template**: use `{{title}}` and `{{url}}`
+- **Image folder**: vault path for downloaded images (default: `Cubox Images`)
+- **Image embed width**: width for `![]()` embeds (default: `800`)
 
-## Usage
+## Usage Notes
 
-1. Before setting up, ensure you have selected the correct server and entered the API key
-2. Only content that meets all filter conditions will be synced
-3. Refer to the settings page for reference links to template variables
-4. Each item is synced only once from Cubox, updates in Cubox will not be synced to Obsidian unless you change the target folder
-5. It is recommended to set a longer sync interval or use manual sync to prevent syncing unfinished annotations
-
-## Dependencies
-
-- [Mustache](https://mustache.github.io/): Template rendering
-- [Luxon](https://moment.github.io/luxon/#/formatting?id=table-of-tokens): Date and time handling
+- New entries are appended only to **today’s** daily note
+- Each card is appended once; later Cubox updates won’t duplicate it
+- Image OCR text is ignored; only the image is embedded locally
 
 ## License
 
-This project is licensed under the [MIT License](https://choosealicense.com/licenses/mit/).
+This project is licensed under the MIT License.
