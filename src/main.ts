@@ -1,4 +1,5 @@
-import { Notice, Plugin, TFile, normalizePath } from 'obsidian';
+import { Notice, Plugin, TFile, TFolder, normalizePath, requestUrl } from 'obsidian';
+import path from 'path';
 import { CuboxApi, CuboxArticle } from './cuboxApi';
 import { CuboxDailySyncSettingTab, CuboxDailySyncSettings, DEFAULT_SETTINGS } from './cuboxSetting';
 import { parseCuboxTime } from './utils';
@@ -108,11 +109,15 @@ export default class CuboxDailySyncPlugin extends Plugin {
 						continue;
 					}
 
-					const entry = await this.formatEntry(article);
-					entries.push(entry);
-					recentIds.add(article.id);
-					if (articleTime > newestSyncTime) {
-						newestSyncTime = articleTime;
+					try {
+						const entry = await this.formatEntry(article);
+						entries.push(entry);
+						recentIds.add(article.id);
+						if (articleTime > newestSyncTime) {
+							newestSyncTime = articleTime;
+						}
+					} catch (error) {
+						console.error('CuboxDailySync: entry skipped', { id: article.id, error });
 					}
 				}
 
@@ -122,7 +127,7 @@ export default class CuboxDailySyncPlugin extends Plugin {
 			}
 
 			if (entries.length > 0) {
-				const payload = `${entries.join('\n\n')}\n`;
+				const payload = entries.join('\n\n');
 				await this.appendToFile(dailyNote, payload);
 			}
 
@@ -175,6 +180,10 @@ export default class CuboxDailySyncPlugin extends Plugin {
 	}
 
 	private async formatEntry(article: CuboxArticle): Promise<string> {
+		if (this.isImageArticle(article)) {
+			return await this.formatImageEntry(article);
+		}
+
 		if (this.isLinkArticle(article)) {
 			return this.renderLinkTemplate(article);
 		}
@@ -187,10 +196,96 @@ export default class CuboxDailySyncPlugin extends Plugin {
 		return content;
 	}
 
+	private isImageArticle(article: CuboxArticle): boolean {
+		return article.type === 'Image';
+	}
+
+	private async formatImageEntry(article: CuboxArticle): Promise<string> {
+		const content = await this.cuboxApi.getArticleDetail(article.id);
+		if (!content) {
+			throw new Error(`Cubox image entry ${article.id} returned empty content.`);
+		}
+
+		const imageUrl = this.extractFirstImageUrl(content);
+		const localPath = await this.downloadImage(imageUrl, article.id);
+		const width = this.settings.imageEmbedWidth;
+		const widthToken = width > 0 ? `|${width}` : '';
+		return `![${widthToken}](${this.encodeVaultPath(localPath)})`;
+	}
+
+	private extractFirstImageUrl(content: string): string {
+		const match = content.match(/!\[[^\]]*]\(([^)]+)\)/);
+		if (!match || !match[1]) {
+			const urlMatch = content.match(/https?:\/\/[^\s)]+\.(png|jpe?g|gif|webp)/i);
+			if (urlMatch && urlMatch[0]) {
+				return urlMatch[0];
+			}
+			throw new Error('Cubox image content does not include an image URL yet.');
+		}
+		return match[1];
+	}
+
+	private async downloadImage(imageUrl: string, articleId: string): Promise<string> {
+		// @@@image-download - save Cubox image to a stable local path for embedding.
+		const folder = this.settings.imageFolder.trim();
+		const folderPath = folder ? normalizePath(folder) : '';
+		await this.ensureFolder(folderPath);
+
+		let extension = '.jpg';
+		try {
+			const url = new URL(imageUrl);
+			const extname = path.extname(url.pathname);
+			if (extname) {
+				extension = extname;
+			}
+		} catch (error) {
+			throw new Error(`Invalid image URL: ${imageUrl}`);
+		}
+
+		const filename = `${articleId}${extension}`;
+		const filePath = normalizePath(folderPath ? `${folderPath}/${filename}` : filename);
+		const existing = this.app.vault.getAbstractFileByPath(filePath);
+		if (existing instanceof TFile) {
+			return filePath;
+		}
+
+		const response = await requestUrl({ url: imageUrl, method: 'GET' });
+		if (response.status >= 400) {
+			throw new Error(`Image download failed with status ${response.status}`);
+		}
+
+		await this.app.vault.createBinary(filePath, response.arrayBuffer);
+		return filePath;
+	}
+
+	private encodeVaultPath(filePath: string): string {
+		return filePath
+			.split('/')
+			.map(segment => encodeURIComponent(segment))
+			.join('/');
+	}
+
+	private async ensureFolder(folderPath: string) {
+		if (!folderPath) {
+			return;
+		}
+
+		const existing = this.app.vault.getAbstractFileByPath(folderPath);
+		if (!existing) {
+			await this.app.vault.createFolder(folderPath);
+			return;
+		}
+
+		if (!(existing instanceof TFolder)) {
+			throw new Error(`Image folder path is not a folder: ${folderPath}`);
+		}
+	}
+
 	private async appendToFile(file: TFile, payload: string) {
 		const existing = await this.app.vault.read(file);
-		const separator = existing.endsWith('\n') || existing.length === 0 ? '' : '\n';
-		await this.app.vault.modify(file, `${existing}${separator}${payload}`);
+		const trimmedPayload = payload.replace(/^\n+|\n+$/g, '');
+		const separator = existing.length > 0 && trimmedPayload.length > 0 ? '\n\n' : '';
+		await this.app.vault.modify(file, `${existing}${separator}${trimmedPayload}`);
 	}
 
 	private async getTodayDailyNote(): Promise<TFile> {

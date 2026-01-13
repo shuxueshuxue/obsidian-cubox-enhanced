@@ -8,6 +8,8 @@ export interface CuboxDailySyncSettings {
 	apiKey: string;
 	syncFrequencyMinutes: number;
 	linkTemplate: string;
+	imageFolder: string;
+	imageEmbedWidth: number;
 	lastSyncTime: number;
 	lastSyncCardId: string | null;
 	lastSyncCardUpdateTime: string | null;
@@ -20,6 +22,8 @@ export const DEFAULT_SETTINGS: CuboxDailySyncSettings = {
 	apiKey: '',
 	syncFrequencyMinutes: 5,
 	linkTemplate: DEFAULT_LINK_TEMPLATE,
+	imageFolder: 'Cubox Images',
+	imageEmbedWidth: 800,
 	lastSyncTime: 0,
 	lastSyncCardId: null,
 	lastSyncCardUpdateTime: null,
@@ -104,6 +108,30 @@ export class CuboxDailySyncSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					});
 				text.inputEl.rows = 2;
+			});
+
+		new Setting(containerEl)
+			.setName('Image folder')
+			.setDesc('Vault folder to store downloaded Cubox images.')
+			.addText(text => {
+				text.setPlaceholder('Cubox Images')
+					.setValue(this.plugin.settings.imageFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.imageFolder = value.trim();
+						await this.plugin.saveSettings();
+					});
+			});
+
+		new Setting(containerEl)
+			.setName('Image embed width')
+			.setDesc('Width for image embeds, e.g. 800.')
+			.addText(text => {
+				text.inputEl.type = 'number';
+				text.setValue(String(this.plugin.settings.imageEmbedWidth))
+					.onChange(async (value) => {
+						this.plugin.settings.imageEmbedWidth = Number(value);
+						await this.plugin.saveSettings();
+					});
 			});
 	}
 }
