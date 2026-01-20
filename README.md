@@ -45,6 +45,7 @@ A minimal Cubox sync plugin that appends new Cubox entries to today’s daily no
 - Each card is appended once; later Cubox updates won’t duplicate it
 - Image OCR text is ignored; only the image is embedded locally
 
+
 ## License
 
 This project is licensed under the MIT License.

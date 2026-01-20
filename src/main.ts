@@ -14,6 +14,10 @@ export default class CuboxDailySyncPlugin extends Plugin {
 		await this.loadSettings();
 
 		this.cuboxApi = new CuboxApi(this.settings.domain, this.settings.apiKey);
+		if (this.settings.syncing) {
+			this.settings.syncing = false;
+			await this.saveSettings();
+		}
 
 		if (!this.settings.lastSyncTime) {
 			this.settings.lastSyncTime = Date.now();
@@ -24,7 +28,7 @@ export default class CuboxDailySyncPlugin extends Plugin {
 			id: 'sync-cubox-to-daily-note',
 			name: 'Sync Cubox to daily note',
 			callback: async () => {
-				await this.syncCubox();
+				await this.syncCubox(true);
 			},
 		});
 
@@ -53,7 +57,7 @@ export default class CuboxDailySyncPlugin extends Plugin {
 
 		if (this.settings.syncFrequencyMinutes > 0) {
 			this.syncIntervalId = window.setInterval(
-				async () => await this.syncCubox(),
+				async () => await this.syncCubox(false),
 				this.settings.syncFrequencyMinutes * 60 * 1000
 			);
 			this.registerInterval(this.syncIntervalId);
@@ -64,12 +68,24 @@ export default class CuboxDailySyncPlugin extends Plugin {
 		this.cuboxApi.updateConfig(domain, apiKey);
 	}
 
-	private async syncCubox() {
+	private async syncCubox(verbose: boolean) {
+		const log = (message: string, data?: Record<string, unknown>) => {
+			if (!verbose) return;
+			if (data) {
+				console.log(message, data);
+			} else {
+				console.log(message);
+			}
+		};
+
+		log('CuboxDailySync: manual sync started');
 		if (this.settings.syncing) {
+			log('CuboxDailySync: sync already running');
 			return;
 		}
 
 		if (!this.settings.domain || !this.settings.apiKey) {
+			log('CuboxDailySync: missing domain or API key');
 			throw new Error('Cubox sync needs a domain and API key.');
 		}
 
@@ -78,7 +94,9 @@ export default class CuboxDailySyncPlugin extends Plugin {
 
 		try {
 			const dailyNote = await this.getTodayDailyNote();
+			log('CuboxDailySync: daily note ready', { path: dailyNote.path });
 			const lastSyncTime = this.settings.lastSyncTime;
+			log('CuboxDailySync: lastSyncTime', { lastSyncTime });
 			let newestSyncTime = lastSyncTime;
 			let lastCardId: string | null = this.settings.lastSyncCardId;
 			let lastCardUpdateTime: string | null = this.settings.lastSyncCardUpdateTime;
@@ -87,10 +105,15 @@ export default class CuboxDailySyncPlugin extends Plugin {
 			const entries: string[] = [];
 
 			while (hasMore) {
+				log('CuboxDailySync: requesting page', { lastCardId, lastCardUpdateTime });
 				const response: { articles: CuboxArticle[]; hasMore: boolean } = await this.cuboxApi.getArticlesPage(
 					lastCardId,
 					lastCardUpdateTime
 				);
+				log('CuboxDailySync: page received', {
+					count: response.articles.length,
+					hasMore: response.hasMore,
+				});
 				const articles: CuboxArticle[] = response.articles;
 				const moreArticles: boolean = response.hasMore;
 
@@ -130,6 +153,7 @@ export default class CuboxDailySyncPlugin extends Plugin {
 				const payload = entries.join('\n\n');
 				await this.appendToFile(dailyNote, payload);
 			}
+			log('CuboxDailySync: entries appended', { count: entries.length });
 
 			if (lastCardId && lastCardUpdateTime) {
 				this.settings.lastSyncCardId = lastCardId;
